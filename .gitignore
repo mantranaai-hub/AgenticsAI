@@ -1,0 +1,6 @@
+.venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+.env
+src/engineering_team/vscode_optimized/sandbox/

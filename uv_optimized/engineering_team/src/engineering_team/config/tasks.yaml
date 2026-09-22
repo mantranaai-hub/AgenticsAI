@@ -1,0 +1,108 @@
+design_task:
+  description: >
+    Take the high level requirements described here and prepare a detailed design for the engineering team.
+    Here are the requirements: {requirements}
+    IMPORTANT: Only output the design in markdown. Lay out the modules, classes and functions.
+    Do not write any code. Function or method signatures only.
+    Assign work to: backend_engineer (backend modules), frontend_engineer (app.py),
+    test_engineer (the test files).
+    All engineers work in the same flat sandbox directory. There is no directory structure.
+    Everything runs in a uv project where gradio is the only third-party package.
+    Your design MUST include a section titled "Event Wiring Table". For every interactive
+    component give: the trigger component, the trigger method, the handler name, the ordered
+    list of input components, the ordered list of output components, and the exact return
+    contract stating how many values the handler returns and what each position maps to.
+    The number of returned values must equal the number of output components.
+    In that table you MUST enforce two structural rules and state them explicitly:
+    Rule 1. A handler bound to a component's own listener must never write back to that same
+    component. If handler H is triggered by component X, then X must not appear in H's outputs.
+    Violating this creates a self-perpetuating event loop that makes the UI blink forever.
+    Rule 2. Any Dropdown, Radio or CheckboxGroup that appears in a handler's outputs must
+    receive a gr.update carrying BOTH choices and value. A bare list or string sets only the
+    value, which Gradio rejects when it is not already among the existing choices.
+    Also name which component holds the authoritative selection state. Prefer gr.State, and
+    have handlers read the selected id from State rather than from the Dropdown.
+  expected_output: >
+    A detailed design to achieve the requirements, identifying code structure, and assignments to the engineers.
+  agent: engineering_lead
+  output_file: sandbox/design.md
+
+code_task:
+  description: >
+    Write the python backend modules that implement the design from the engineering lead.
+    Here are the requirements: {requirements}
+    Use the Python standard library only. Do not write app.py or any Gradio code.
+    After writing the modules, run a short throwaway script with your sandbox tools that imports
+    every module and exercises each public method once on a success path and once on a
+    rejection path. Read stdout and stderr, fix any error, and rerun until the exit code is 0.
+  expected_output: >
+    Python files written to the sandbox and tested that implement the design and achieve the requirements.
+    IMPORTANT: Use your sandbox tools to write and check the code.
+  agent: backend_engineer
+  context:
+    - design_task
+
+frontend_task:
+  description: >
+    Write a gradio UI in a module app.py that demonstrates the backend code, following the
+    design's Event Wiring Table exactly. Assume a single user. The UI must be professional,
+    polished and clean, and work in light and dark mode.
+    Here are the requirements: {requirements}
+    You MUST obey these two rules, which are the most common cause of a broken Gradio app:
+    Rule 1. A handler triggered by a component must never include that component in its own
+    outputs. If you bind a change listener on the account selector, the handler that listener
+    calls must NOT write to the account selector.
+    Rule 2. When a handler writes to a Dropdown, Radio or CheckboxGroup, it must return a
+    gr.update carrying BOTH choices and value. Never return a bare list or string to those
+    components.
+    Keep the authoritative selected-account id in gr.State and read it from State in handlers.
+    Then write _validate.py and run it with your sandbox tools. Constructing the Blocks object
+    is NOT sufficient validation and will not be accepted. _validate.py must:
+    1. Turn warnings into errors at the top of the file, so that any Gradio UserWarning about a
+       dropdown value not being among its choices fails the script instead of being printed.
+    2. Import app.py and build the Blocks object.
+    3. Call every handler function directly with representative arguments.
+    4. For each handler, assert the number of returned values equals the number of output
+       components bound to that handler's event.
+    5. For each handler that writes to a Dropdown, Radio or CheckboxGroup, assert the value
+       returned for that position is an update object and not a bare list or string.
+    6. Run a full smoke sequence in realistic order: create an account, select it, deposit,
+       buy, sell, withdraw. Assert none of these raise.
+    7. Never call launch. That blocks until timeout.
+    Read both stdout and stderr from the run. Fix app.py and rerun until the exit code is 0.
+  expected_output: >
+    app.py in the sandbox that runs as-is from that directory, plus _validate.py which exits 0
+    having invoked every handler, asserted every return contract, completed the smoke sequence,
+    and raised no Gradio dropdown warnings.
+    IMPORTANT: Use your sandbox tools to write and check the code. Report the final exit code.
+
+  agent: frontend_engineer
+  context:
+    - code_task
+    - design_task
+
+test_task:
+  description: >
+    Write unit tests using the stdlib unittest module. Do not use pytest or any third-party package.
+    Write two test files:
+    1. Tests for the backend modules, covering the success path and the rejection path for every
+       public method, every boundary condition, and every validation rule in the design.
+    2. Handler contract tests for app.py. Import build_app, call each handler directly, and assert
+       the number and types of returned values. Assert that any handler writing to a Dropdown,
+       Radio or CheckboxGroup returns an update object carrying choices, not a bare list.
+       Also assert that no handler returns a value for a component that is its own trigger.
+       Do not use browser automation and never call launch.
+    Run the tests with your sandbox tools. unittest writes results, failures and tracebacks to
+    stderr rather than stdout, so read stderr carefully.
+    When a test fails, decide whether the test or the code is wrong, fix the cause, and rerun.
+    Keep iterating until every test passes and the exit code is 0.
+    If you change backend code, rerun _validate.py afterwards to confirm the gradio app still works.
+  expected_output: >
+    A single test file that can be run to test the backend module.
+    IMPORTANT: Use your sandbox tools to write and run the unit tests.
+    Output a summary of the results of the unit tests.
+  agent: test_engineer
+  context:
+    - code_task
+    - design_task
+  output_file: sandbox/test_summary.md
